@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import TopNavigation from "../dashboard/layout/TopNavigation";
 import Sidebar from "../dashboard/layout/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,54 @@ import PortfolioSummary from "../dashboard/PortfolioSummary";
 import PortfolioChart from "../dashboard/PortfolioChart";
 import HoldingsTable from "../dashboard/HoldingsTable";
 
+// Add Plaid to window type
+declare global {
+  interface Window {
+    Plaid?: any;
+  }
+}
+
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
+  const [plaidReady, setPlaidReady] = useState(false);
+
+  // Dynamically load Plaid script
+  useEffect(() => {
+    if (window.Plaid) {
+      setPlaidReady(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+    script.async = true;
+    script.onload = () => setPlaidReady(true);
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Plaid Link handler
+  const handleConnectAccounts = useCallback(async () => {
+    if (!window.Plaid) return;
+    const res = await fetch("/functions/v1/create-link-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "user-123" }),
+    });
+    const { link_token } = await res.json();
+    const handler = window.Plaid.create({
+      token: link_token,
+      onSuccess: async (public_token, metadata) => {
+        await fetch("/functions/v1/exchange-public-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ public_token, userId: "user-123" }),
+        });
+      },
+    });
+    handler.open();
+  }, []);
 
   // Function to trigger loading state for demonstration
   const handleRefresh = () => {
@@ -40,9 +86,18 @@ const Dashboard = () => {
         <Sidebar items={navItems} activeItem="Dashboard" />
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-6 pt-4 pb-2 flex justify-between items-center">
-            <h1 className="text-2xl font-semibold text-gray-900">
-              Investment Dashboard
-            </h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-semibold text-gray-900">
+                Investment Dashboard
+              </h1>
+              <Button
+                className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors"
+                onClick={handleConnectAccounts}
+                disabled={!plaidReady}
+              >
+                Connect Accounts
+              </Button>
+            </div>
             <Button
               onClick={handleRefresh}
               className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors flex items-center gap-2"
