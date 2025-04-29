@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import PortfolioSummary from "../dashboard/PortfolioSummary";
 import PortfolioChart from "../dashboard/PortfolioChart";
 import HoldingsTable from "../dashboard/HoldingsTable";
+import { createClient } from "@supabase/supabase-js";
+
+// Initialize Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 // Add Plaid to window type
 declare global {
@@ -38,35 +45,77 @@ const Dashboard = () => {
   // Plaid Link handler
   const handleConnectAccounts = useCallback(async () => {
     if (!window.Plaid) return;
-    const res = await fetch("/functions/v1/create-link-token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: "user-123" }),
-    });
-    const { link_token } = await res.json();
-    const handler = window.Plaid.create({
-      token: link_token,
-      onSuccess: async (public_token, metadata) => {
-        await fetch("/functions/v1/exchange-public-token", {
+
+    setLoading(true);
+
+    try {
+      // Get the logged-in user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const user_id = user?.id;
+
+      if (!user_id) {
+        console.error("User not logged in.");
+        alert("Please log in first.");
+        setLoading(false);
+        return;
+      }
+
+      // Get a link token
+      const res = await fetch(
+        "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/create-link-token",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token, userId: "user-123" }),
-        });
-      },
-    });
-    handler.open();
+          body: JSON.stringify({ user_id }), // use user_id, matches your DB
+        },
+      );
+
+      const { link_token } = await res.json();
+
+      if (!link_token) {
+        throw new Error("Failed to retrieve link token");
+      }
+
+      const handler = window.Plaid.create({
+        token: link_token,
+        onSuccess: async (public_token, metadata) => {
+          // Exchange the public token
+          await fetch(
+            "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/exchange-public-token",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ public_token, user_id }),
+            },
+          );
+          alert("Bank account connected successfully!");
+          setLoading(false);
+        },
+        onExit: (err, metadata) => {
+          console.error("Plaid Link exited:", err, metadata);
+          setLoading(false);
+        },
+      });
+
+      handler.open();
+    } catch (error) {
+      console.error("Error connecting account:", error);
+      alert("Something went wrong. Please try again.");
+      setLoading(false);
+    }
   }, []);
 
-  // Function to trigger loading state for demonstration
+  // Refresh button simulation
   const handleRefresh = () => {
     setLoading(true);
-    // Reset loading after 2 seconds
     setTimeout(() => {
       setLoading(false);
     }, 2000);
   };
 
-  // Custom navigation items for investment dashboard
+  // Navigation items
   const navItems = [
     {
       icon: <span className="text-gray-500">📊</span>,
@@ -93,9 +142,9 @@ const Dashboard = () => {
               <Button
                 className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors"
                 onClick={handleConnectAccounts}
-                disabled={!plaidReady}
+                disabled={!plaidReady || loading}
               >
-                Connect Accounts
+                {loading ? "Connecting..." : "Connect Accounts"}
               </Button>
             </div>
             <Button
