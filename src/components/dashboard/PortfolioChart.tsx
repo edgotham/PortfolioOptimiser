@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Tooltip,
@@ -6,6 +6,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+interface Holding {
+  security_type: string;
+  institution_value: number;
+}
 
 interface AssetAllocation {
   name: string;
@@ -15,39 +20,62 @@ interface AssetAllocation {
 }
 
 interface PortfolioChartProps {
-  assets?: AssetAllocation[];
+  holdings: Holding[];
 }
 
-const defaultAssets: AssetAllocation[] = [
-  { name: "Stocks", value: 45000, percentage: 45, color: "#4f46e5" },
-  { name: "Bonds", value: 30000, percentage: 30, color: "#10b981" },
-  { name: "Real Estate", value: 15000, percentage: 15, color: "#f59e0b" },
-  { name: "Crypto", value: 5000, percentage: 5, color: "#ef4444" },
-  { name: "Cash", value: 5000, percentage: 5, color: "#8b5cf6" },
+const COLORS = [
+  "#4f46e5",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#14b8a6",
+  "#db2777",
+  "#047857",
 ];
 
-const PortfolioChart = ({ assets = defaultAssets }: PortfolioChartProps) => {
-  const [hoveredAsset, setHoveredAsset] = useState<AssetAllocation | null>(
-    null,
-  );
-  const totalValue = assets.reduce((sum, asset) => sum + asset.value, 0);
+export default function PortfolioChart({ holdings }: PortfolioChartProps) {
+  // 1️⃣ Aggregate by security_type
+  const assets = useMemo<AssetAllocation[]>(() => {
+    const agg: Record<string, number> = {};
+    let total = 0;
 
-  // Generate conic gradient for pie chart
-  const generateConicGradient = () => {
-    let gradient = "";
-    let currentPercentage = 0;
-
-    assets.forEach((asset) => {
-      const startPercentage = currentPercentage;
-      currentPercentage += asset.percentage;
-      gradient += `${asset.color} ${startPercentage}% ${currentPercentage}%, `;
+    holdings.forEach((h) => {
+      agg[h.security_type] = (agg[h.security_type] || 0) + h.institution_value;
+      total += h.institution_value;
     });
 
-    return `conic-gradient(${gradient.slice(0, -2)})`;
-  };
+    return Object.entries(agg).map(([name, value], i) => ({
+      name,
+      value,
+      percentage: total > 0 ? Math.round((value / total) * 100) : 0,
+      color: COLORS[i % COLORS.length],
+    }));
+  }, [holdings]);
+
+  const totalValue = assets.reduce((sum, a) => sum + a.value, 0);
+
+  const [hovered, setHovered] = useState<AssetAllocation | null>(null);
+
+  // 2️⃣ Build conic gradient string
+  const gradient = useMemo(() => {
+    let start = 0;
+    return (
+      "conic-gradient(" +
+      assets
+        .map((a) => {
+          const end = start + a.percentage;
+          const seg = `${a.color} ${start}% ${end}%`;
+          start = end;
+          return seg;
+        })
+        .join(", ") +
+      ")"
+    );
+  }, [assets]);
 
   return (
-    <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden h-full">
+    <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm h-full">
       <CardHeader className="pb-2">
         <CardTitle className="text-xl font-semibold text-gray-900">
           Portfolio Allocation
@@ -59,25 +87,25 @@ const PortfolioChart = ({ assets = defaultAssets }: PortfolioChartProps) => {
       <CardContent>
         <div className="flex flex-col items-center">
           <div className="relative w-64 h-64 mb-6">
-            {/* Pie Chart */}
+            {/* Pie */}
             <div
               className="absolute inset-0 rounded-full overflow-hidden border-8 border-white shadow-inner"
-              style={{ background: generateConicGradient() }}
-            ></div>
+              style={{ background: gradient }}
+            />
 
-            {/* Center circle */}
+            {/* Center */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="bg-white w-[60%] h-[60%] rounded-full flex flex-col items-center justify-center shadow-sm">
-                {hoveredAsset ? (
+                {hovered ? (
                   <>
                     <div className="text-sm font-medium text-gray-500">
-                      {hoveredAsset.name}
+                      {hovered.name}
                     </div>
                     <div className="text-xl font-bold">
-                      ${hoveredAsset.value.toLocaleString()}
+                      ${hovered.value.toLocaleString()}
                     </div>
                     <div className="text-lg font-semibold text-blue-600">
-                      {hoveredAsset.percentage}%
+                      {hovered.percentage}%
                     </div>
                   </>
                 ) : (
@@ -88,38 +116,34 @@ const PortfolioChart = ({ assets = defaultAssets }: PortfolioChartProps) => {
               </div>
             </div>
 
-            {/* Interactive segments */}
-            {assets.map((asset, index) => {
-              // Calculate position for hover areas around the chart
-              const angle = (asset.percentage / 100) * 360;
-              const previousAngles = assets
-                .slice(0, index)
-                .reduce((sum, a) => sum + (a.percentage / 100) * 360, 0);
-              const midAngle = previousAngles + angle / 2;
-              const radians = (midAngle - 90) * (Math.PI / 180);
-              const x = Math.cos(radians) * 100 + 50;
-              const y = Math.sin(radians) * 100 + 50;
-
+            {/* Hit areas */}
+            {assets.map((a, i) => {
+              const mid =
+                assets.slice(0, i).reduce((sum, x) => sum + x.percentage, 0) +
+                a.percentage / 2;
+              const rad = ((mid - 90) * Math.PI) / 180;
+              const x = Math.cos(rad) * 100 + 50;
+              const y = Math.sin(rad) * 100 + 50;
               return (
-                <TooltipProvider key={asset.name}>
+                <TooltipProvider key={a.name}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="absolute w-8 h-8 rounded-full cursor-pointer bg-transparent"
+                        className="absolute w-8 h-8 rounded-full cursor-pointer"
                         style={{
                           left: `${x}%`,
                           top: `${y}%`,
                           transform: "translate(-50%, -50%)",
                         }}
-                        onMouseEnter={() => setHoveredAsset(asset)}
-                        onMouseLeave={() => setHoveredAsset(null)}
+                        onMouseEnter={() => setHovered(a)}
+                        onMouseLeave={() => setHovered(null)}
                       />
                     </TooltipTrigger>
                     <TooltipContent className="bg-white shadow-lg border border-gray-100 p-2 rounded-lg">
                       <div className="text-sm">
-                        <div className="font-medium">{asset.name}</div>
+                        <div className="font-medium">{a.name}</div>
                         <div>
-                          ${asset.value.toLocaleString()} ({asset.percentage}%)
+                          ${a.value.toLocaleString()} ({a.percentage}%)
                         </div>
                       </div>
                     </TooltipContent>
@@ -131,19 +155,19 @@ const PortfolioChart = ({ assets = defaultAssets }: PortfolioChartProps) => {
 
           {/* Legend */}
           <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-            {assets.map((asset) => (
+            {assets.map((a) => (
               <div
-                key={asset.name}
-                className="flex items-center gap-2 text-sm"
-                onMouseEnter={() => setHoveredAsset(asset)}
-                onMouseLeave={() => setHoveredAsset(null)}
+                key={a.name}
+                className="flex items-center gap-2 text-sm cursor-pointer"
+                onMouseEnter={() => setHovered(a)}
+                onMouseLeave={() => setHovered(null)}
               >
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: asset.color }}
+                  style={{ backgroundColor: a.color }}
                 />
-                <span className="font-medium">{asset.name}</span>
-                <span className="text-gray-500">{asset.percentage}%</span>
+                <span className="font-medium">{a.name}</span>
+                <span className="text-gray-500">{a.percentage}%</span>
               </div>
             ))}
           </div>
@@ -151,6 +175,4 @@ const PortfolioChart = ({ assets = defaultAssets }: PortfolioChartProps) => {
       </CardContent>
     </Card>
   );
-};
-
-export default PortfolioChart;
+}

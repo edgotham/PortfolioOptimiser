@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import TopNavigation from "../dashboard/layout/TopNavigation";
 import Sidebar from "../dashboard/layout/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -9,20 +9,11 @@ import PortfolioChart from "../dashboard/PortfolioChart";
 import HoldingsTable from "../dashboard/HoldingsTable";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Supabase setup
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase environment variables');
-}
-
-const supabase = createClient(
-  supabaseUrl!,
-  supabaseKey!,
-);
-
-// Add Plaid to window type
 declare global {
   interface Window {
     Plaid?: any;
@@ -32,8 +23,12 @@ declare global {
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [plaidReady, setPlaidReady] = useState(false);
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
 
-  // Dynamically load Plaid script
+  const addDebugLog = (msg: string) => setDebugLog((prev) => [...prev, msg]);
+
+  // Load Plaid Link script
   useEffect(() => {
     if (window.Plaid) {
       setPlaidReady(true);
@@ -49,90 +44,166 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Plaid Link handler
+  // Fetch and refresh holdings
+  const fetchHoldings = async (user_id: string) => {
+    try {
+      addDebugLog("Refreshing holdings from Plaid...");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      // 1. Trigger Plaid sync
+      const refreshRes = await fetch(
+        "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/fetch-investments",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ userId: user_id }),
+        },
+      );
+      if (!refreshRes.ok) {
+        const err = await refreshRes.text();
+        throw new Error(`Plaid sync failed: ${err}`);
+      }
+      addDebugLog("Plaid sync successful. Fetching from Supabase...");
+
+      // 2. Read from Supabase
+      const { data, error } = await supabase
+        .from("investment_holdings")
+        .select("*")
+        .eq("user_id", user_id);
+      if (error) throw error;
+
+      setHoldings(data || []);
+      addDebugLog(`Fetched ${data?.length || 0} holdings.`);
+    } catch (err: any) {
+      console.error("Error fetching holdings:", err);
+      addDebugLog(`Error: ${err.message}`);
+    }
+  };
+
+  // Handle Plaid Link
   const handleConnectAccounts = useCallback(async () => {
     if (!window.Plaid) return;
-
     setLoading(true);
 
     try {
-      // Get the logged-in user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const user_id = user?.id;
+      const { data: userData } = await supabase.auth.getUser();
+      const user_id = userData.user?.id;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
       if (!user_id) {
-        console.error("User not logged in.");
         alert("Please log in first.");
+        addDebugLog("User not logged in.");
         setLoading(false);
         return;
       }
 
-      // Get a link token
+      addDebugLog(`User ID: ${user_id}`);
+
+      // Create link token
       const res = await fetch(
         "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/create-link-token",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id }), // use user_id, matches your DB
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ user_id }),
         },
       );
-
-      const { link_token } = await res.json();
-
-      if (!link_token) {
-        throw new Error("Failed to retrieve link token");
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Create link token failed: ${err}`);
       }
+      const { link_token } = await res.json();
+      if (!link_token) throw new Error("Link token missing");
 
       const handler = window.Plaid.create({
         token: link_token,
-        onSuccess: async (public_token, metadata) => {
-          // Exchange the public token
-          await fetch(
+        onSuccess: async (public_token: string, metadata: any) => {
+          addDebugLog("Plaid success: exchanging token...");
+          const inst = metadata.institution || {};
+          // Exchange token
+          const exchangeRes = await fetch(
             "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/exchange-public-token",
             {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ public_token, user_id }),
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                public_token,
+                user_id,
+                institution: {
+                  id: inst.institution_id,
+                  name: inst.name,
+                },
+              }),
             },
           );
-          alert("Bank account connected successfully!");
+          if (!exchangeRes.ok) {
+            const err = await exchangeRes.text();
+            throw new Error(`Token exchange failed: ${err}`);
+          }
+          addDebugLog("Token exchange success. Refreshing holdings...");
+          await fetchHoldings(user_id);
+          alert("Bank account connected!");
           setLoading(false);
         },
-        onExit: (err, metadata) => {
-          console.error("Plaid Link exited:", err, metadata);
+        onExit: () => {
+          addDebugLog("Plaid Link exited by user.");
           setLoading(false);
         },
       });
-
       handler.open();
-    } catch (error) {
-      console.error("Error connecting account:", error);
-      alert("Something went wrong. Please try again.");
+    } catch (err: any) {
+      console.error("Connect error:", err);
+      addDebugLog(`Error: ${err.message}`);
+      alert("Something went wrong.");
       setLoading(false);
     }
   }, []);
 
-  // Refresh button simulation
-  const handleRefresh = () => {
+  // Manual refresh
+  const handleRefresh = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user_id = userData.user?.id;
+      if (user_id) await fetchHoldings(user_id);
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
-  // Navigation items
+  // Summary metrics
+  const totalValue = useMemo(
+    () => holdings.reduce((sum, h) => sum + (h.institution_value || 0), 0),
+    [holdings],
+  );
+  const totalCost = useMemo(
+    () =>
+      holdings.reduce((sum, h) => sum + h.quantity * (h.cost_basis ?? 0), 0),
+    [holdings],
+  );
+  const totalGain = totalValue - totalCost;
+  const totalReturn = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+  const dailyChange = 0; // implement if you have historical data
+
   const navItems = [
-    {
-      icon: <span className="text-gray-500">📊</span>,
-      label: "Dashboard",
-      isActive: true,
-    },
-    { icon: <span className="text-gray-500">💼</span>, label: "Portfolio" },
-    { icon: <span className="text-gray-500">📈</span>, label: "Markets" },
-    { icon: <span className="text-gray-500">🔍</span>, label: "Research" },
-    { icon: <span className="text-gray-500">⚙️</span>, label: "Settings" },
+    { icon: <span>📊</span>, label: "Dashboard", isActive: true },
+    { icon: <span>💼</span>, label: "Portfolio" },
+    { icon: <span>📈</span>, label: "Markets" },
+    { icon: <span>🔍</span>, label: "Research" },
+    { icon: <span>⚙️</span>, label: "Settings" },
   ];
 
   return (
@@ -147,7 +218,7 @@ const Dashboard = () => {
                 Investment Dashboard
               </h1>
               <Button
-                className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors"
+                className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 h-9 shadow-sm"
                 onClick={handleConnectAccounts}
                 disabled={!plaidReady || loading}
               >
@@ -156,30 +227,37 @@ const Dashboard = () => {
             </div>
             <Button
               onClick={handleRefresh}
-              className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors flex items-center gap-2"
+              className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm flex items-center gap-2"
             >
               <RefreshCw
                 className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
               />
-              {loading ? "Loading..." : "Refresh Data"}
+              {loading ? "Refreshing..." : "Refresh Data"}
             </Button>
           </div>
-          <div
-            className={cn(
-              "container mx-auto p-6 space-y-8",
-              "transition-all duration-300 ease-in-out",
-            )}
-          >
-            {/* Portfolio Summary Cards */}
-            <PortfolioSummary />
 
-            {/* Portfolio Chart and Holdings Table */}
+          <div className="container mx-auto p-6 space-y-8">
+            <PortfolioSummary
+              totalValue={totalValue}
+              dailyChange={dailyChange}
+              totalGain={totalGain}
+              totalReturn={totalReturn}
+            />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1">
-                <PortfolioChart />
+                <PortfolioChart holdings={holdings} />
               </div>
               <div className="lg:col-span-2">
-                <HoldingsTable />
+                <HoldingsTable holdings={holdings} />
+              </div>
+            </div>
+
+            <div className="bg-gray-800 text-white p-4 rounded shadow mt-8">
+              <h2 className="text-lg font-bold mb-2">Debug Panel</h2>
+              <div className="space-y-1 text-sm max-h-48 overflow-auto">
+                {debugLog.map((log, idx) => (
+                  <div key={idx}>{log}</div>
+                ))}
               </div>
             </div>
           </div>

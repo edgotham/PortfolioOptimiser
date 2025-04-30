@@ -5,124 +5,53 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Search } from "lucide-react";
 
 interface Holding {
-  id: string;
-  name: string;
-  ticker: string;
+  security_name: string;
+  ticker_symbol: string;
+  security_type: string;
   quantity: number;
-  price: number;
-  value: number;
-  change: number;
+  institution_price: number;
+  institution_value: number;
 }
 
 interface HoldingsTableProps {
-  holdings?: Holding[];
+  holdings: Holding[];
 }
 
-const defaultHoldings: Holding[] = [
-  {
-    id: "1",
-    name: "Apple Inc.",
-    ticker: "AAPL",
-    quantity: 100,
-    price: 175.04,
-    value: 17504,
-    change: 12.3,
-  },
-  {
-    id: "2",
-    name: "Microsoft Corporation",
-    ticker: "MSFT",
-    quantity: 50,
-    price: 410.34,
-    value: 20517,
-    change: 8.7,
-  },
-  {
-    id: "3",
-    name: "Alphabet Inc.",
-    ticker: "GOOGL",
-    quantity: 100,
-    price: 152.19,
-    value: 15219,
-    change: -2.1,
-  },
-  {
-    id: "4",
-    name: "Amazon.com Inc.",
-    ticker: "AMZN",
-    quantity: 100,
-    price: 178.75,
-    value: 17875,
-    change: 5.4,
-  },
-  {
-    id: "5",
-    name: "Tesla Inc.",
-    ticker: "TSLA",
-    quantity: 50,
-    price: 175.34,
-    value: 8767,
-    change: -3.8,
-  },
-  {
-    id: "6",
-    name: "NVIDIA Corporation",
-    ticker: "NVDA",
-    quantity: 30,
-    price: 950.02,
-    value: 28500.6,
-    change: 15.2,
-  },
-  {
-    id: "7",
-    name: "Meta Platforms Inc.",
-    ticker: "META",
-    quantity: 40,
-    price: 485.39,
-    value: 19415.6,
-    change: 7.8,
-  },
-];
-
-const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
-  const [sortField, setSortField] = useState<keyof Holding>("value");
+const HoldingsTable = ({ holdings = [] }: HoldingsTableProps) => {
+  // Default sort by value descending
+  const [sortField, setSortField] =
+    useState<keyof Holding>("institution_value");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSort = (field: keyof Holding) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDirection("desc");
     }
   };
 
-  const filteredHoldings = holdings.filter(
-    (holding) =>
-      holding.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      holding.ticker.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filtered = holdings.filter(
+    (h) =>
+      h.security_name.toLowerCase().includes(searchQuery) ||
+      h.ticker_symbol.toLowerCase().includes(searchQuery),
   );
 
-  const sortedHoldings = [...filteredHoldings].sort((a, b) => {
-    if (sortField === "name" || sortField === "ticker") {
-      return sortDirection === "asc"
-        ? a[sortField].localeCompare(b[sortField])
-        : b[sortField].localeCompare(a[sortField]);
-    } else {
-      return sortDirection === "asc"
-        ? a[sortField] - b[sortField]
-        : b[sortField] - a[sortField];
+  const sorted = [...filtered].sort((a, b) => {
+    const aVal = a[sortField] as number;
+    const bVal = b[sortField] as number;
+    if (typeof aVal === "number") {
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
     }
+    return 0;
   });
 
-  const totalValue = sortedHoldings.reduce(
-    (sum, holding) => sum + holding.value,
-    0,
-  );
+  const totalValue = sorted.reduce((sum, h) => sum + h.institution_value, 0);
 
   return (
-    <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden h-full">
+    <Card className="bg-white border rounded-2xl shadow-sm overflow-hidden h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
           <div>
@@ -139,7 +68,7 @@ const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
               placeholder="Search assets..."
               className="pl-9 h-10 rounded-full bg-gray-100 border-0 text-sm"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value.toLowerCase())}
             />
           </div>
         </div>
@@ -149,11 +78,11 @@ const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4">
+                {/* Wider first column */}
+                <th className="text-left py-3 px-4 min-w-1/3">
                   <Button
                     variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
-                    onClick={() => handleSort("name")}
+                    onClick={() => handleSort("security_name")}
                   >
                     Asset
                     <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -162,17 +91,24 @@ const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
                 <th className="text-left py-3 px-4">
                   <Button
                     variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
-                    onClick={() => handleSort("ticker")}
+                    onClick={() => handleSort("ticker_symbol")}
                   >
                     Ticker
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </th>
+                <th className="text-left py-3 px-4">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort("security_type")}
+                  >
+                    Type
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </th>
                 <th className="text-right py-3 px-4">
                   <Button
                     variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
                     onClick={() => handleSort("quantity")}
                   >
                     Quantity
@@ -182,8 +118,7 @@ const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
                 <th className="text-right py-3 px-4">
                   <Button
                     variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
-                    onClick={() => handleSort("price")}
+                    onClick={() => handleSort("institution_price")}
                   >
                     Price
                     <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -192,59 +127,38 @@ const HoldingsTable = ({ holdings = defaultHoldings }: HoldingsTableProps) => {
                 <th className="text-right py-3 px-4">
                   <Button
                     variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
-                    onClick={() => handleSort("value")}
+                    onClick={() => handleSort("institution_value")}
                   >
                     Value
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </th>
-                <th className="text-right py-3 px-4">
-                  <Button
-                    variant="ghost"
-                    className="h-8 px-2 font-medium text-gray-700 hover:text-gray-900"
-                    onClick={() => handleSort("change")}
-                  >
-                    Change
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {sortedHoldings.map((holding) => (
+              {sorted.map((h, idx) => (
                 <tr
-                  key={holding.id}
+                  key={idx}
                   className="border-b border-gray-100 hover:bg-gray-50"
                 >
-                  <td className="py-3 px-4">
-                    <div className="font-medium text-gray-900">
-                      {holding.name}
-                    </div>
+                  {/* Prevent wrapping and enforce width */}
+                  <td className="py-3 px-4 whitespace-nowrap text-gray-900">
+                    {h.security_name}
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="font-medium text-blue-600">
-                      {holding.ticker}
-                    </div>
+                  <td className="py-3 px-4 text-blue-600 whitespace-nowrap">
+                    {h.ticker_symbol}
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    {holding.quantity.toLocaleString()}
+                  <td className="py-3 px-4 whitespace-nowrap text-gray-600">
+                    {h.security_type}
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    ${holding.price.toFixed(2)}
+                  <td className="py-3 px-4 text-right whitespace-nowrap">
+                    {h.quantity.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-right font-medium">
-                    ${holding.value.toLocaleString()}
+                  <td className="py-3 px-4 text-right whitespace-nowrap">
+                    ${h.institution_price.toFixed(2)}
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    <span
-                      className={
-                        holding.change >= 0 ? "text-green-600" : "text-red-600"
-                      }
-                    >
-                      {holding.change >= 0 ? "+" : ""}
-                      {holding.change}%
-                    </span>
+                  <td className="py-3 px-4 text-right font-medium whitespace-nowrap">
+                    ${h.institution_value.toLocaleString()}
                   </td>
                 </tr>
               ))}

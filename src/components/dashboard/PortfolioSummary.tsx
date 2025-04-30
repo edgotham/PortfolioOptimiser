@@ -5,26 +5,26 @@ import {
   ArrowDownRight,
   DollarSign,
   Percent,
-  TrendingUp,
 } from "lucide-react";
 
 interface PortfolioSummaryProps {
-  totalValue?: number;
-  dailyChange?: number;
-  totalGain?: number;
-  totalReturn?: number;
+  totalValue: number;
+  dailyChange: number; // in %, e.g. +1.2 or -0.5
+  totalGain: number; // in $, e.g. +27798.8 or -1234.5
+  totalReturn: number; // in %, e.g. +21.8 or -5.4
 }
 
 const PortfolioSummary = ({
-  totalValue = 127798.8,
-  dailyChange = 1.2,
-  totalGain = 27798.8,
-  totalReturn = 21.8,
+  totalValue,
+  dailyChange,
+  totalGain,
+  totalReturn,
 }: PortfolioSummaryProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      {/* Total Value */}
+      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm">
+        <CardHeader className="flex justify-between pb-2">
           <CardTitle className="text-base font-medium text-gray-700">
             Total Value
           </CardTitle>
@@ -34,18 +34,24 @@ const PortfolioSummary = ({
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-semibold text-gray-900">
-            ${totalValue.toLocaleString()}
+            $
+            {totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </div>
           <p className="text-sm text-gray-500 mt-1">Current portfolio value</p>
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      {/* Daily Change */}
+      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm">
+        <CardHeader className="flex justify-between pb-2">
           <CardTitle className="text-base font-medium text-gray-700">
             Daily Change
           </CardTitle>
-          <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
+          <div
+            className={`h-8 w-8 rounded-full flex items-center justify-center ${
+              dailyChange >= 0 ? "bg-green-50" : "bg-red-50"
+            }`}
+          >
             {dailyChange >= 0 ? (
               <ArrowUpRight className="h-4 w-4 text-green-500" />
             ) : (
@@ -55,17 +61,20 @@ const PortfolioSummary = ({
         </CardHeader>
         <CardContent>
           <div
-            className={`text-3xl font-semibold ${dailyChange >= 0 ? "text-green-600" : "text-red-600"}`}
+            className={`text-3xl font-semibold ${
+              dailyChange >= 0 ? "text-green-600" : "text-red-600"
+            }`}
           >
             {dailyChange >= 0 ? "+" : ""}
-            {dailyChange}%
+            {dailyChange.toFixed(2)}%
           </div>
-          <p className="text-sm text-gray-500 mt-1">From previous day</p>
+          <p className="text-sm text-gray-500 mt-1">Since yesterday</p>
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      {/* Total Gain */}
+      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm">
+        <CardHeader className="flex justify-between pb-2">
           <CardTitle className="text-base font-medium text-gray-700">
             Total Gain
           </CardTitle>
@@ -75,16 +84,22 @@ const PortfolioSummary = ({
         </CardHeader>
         <CardContent>
           <div
-            className={`text-3xl font-semibold ${totalGain >= 0 ? "text-green-600" : "text-red-600"}`}
+            className={`text-3xl font-semibold ${
+              totalGain >= 0 ? "text-green-600" : "text-red-600"
+            }`}
           >
-            {totalGain >= 0 ? "+" : ""}${totalGain.toLocaleString()}
+            {totalGain >= 0 ? "+" : "-"}$
+            {Math.abs(totalGain).toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
           </div>
-          <p className="text-sm text-gray-500 mt-1">All time</p>
+          <p className="text-sm text-gray-500 mt-1">All-time gain</p>
         </CardContent>
       </Card>
 
-      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      {/* Total Return */}
+      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl shadow-sm">
+        <CardHeader className="flex justify-between pb-2">
           <CardTitle className="text-base font-medium text-gray-700">
             Total Return
           </CardTitle>
@@ -94,12 +109,14 @@ const PortfolioSummary = ({
         </CardHeader>
         <CardContent>
           <div
-            className={`text-3xl font-semibold ${totalReturn >= 0 ? "text-green-600" : "text-red-600"}`}
+            className={`text-3xl font-semibold ${
+              totalReturn >= 0 ? "text-green-600" : "text-red-600"
+            }`}
           >
             {totalReturn >= 0 ? "+" : ""}
-            {totalReturn}%
+            {totalReturn.toFixed(2)}%
           </div>
-          <p className="text-sm text-gray-500 mt-1">All time</p>
+          <p className="text-sm text-gray-500 mt-1">All-time return</p>
         </CardContent>
       </Card>
     </div>
