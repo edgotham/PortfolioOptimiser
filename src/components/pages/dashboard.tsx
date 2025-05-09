@@ -1,18 +1,23 @@
+// src/components/pages/Dashboard.tsx
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import TopNavigation from "../dashboard/layout/TopNavigation";
 import Sidebar from "../dashboard/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
 import PortfolioSummary from "../dashboard/PortfolioSummary";
 import PortfolioChart from "../dashboard/PortfolioChart";
 import HoldingsTable from "../dashboard/HoldingsTable";
+import PortfolioAnalysis from "../dashboard/PortfolioAnalysis";
 import { createClient } from "@supabase/supabase-js";
 
 // Supabase setup
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Derive your Functions root URL
+const fnUrl = `${supabaseUrl}/functions/v1`;
 
 declare global {
   interface Window {
@@ -24,11 +29,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [plaidReady, setPlaidReady] = useState(false);
   const [holdings, setHoldings] = useState<any[]>([]);
+  const [analysisText, setAnalysisText] = useState<string>("");
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
 
   const addDebugLog = (msg: string) => setDebugLog((prev) => [...prev, msg]);
 
-  // Load Plaid Link script
+  // 1) Load Plaid Link script
   useEffect(() => {
     if (window.Plaid) {
       setPlaidReady(true);
@@ -39,164 +46,171 @@ const Dashboard = () => {
     script.async = true;
     script.onload = () => setPlaidReady(true);
     document.body.appendChild(script);
-    return () => {
-      document.body.removeChild(script);
-    };
+    return () => document.body.removeChild(script);
   }, []);
 
-  // Fetch and refresh holdings
-  const fetchHoldings = async (user_id: string) => {
+  // 2) On mount, fetch holdings & load last analysis
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) return;
+
+      await fetchHoldings(user.id);
+
+      // load cached analysis if any
+      const cached = localStorage.getItem(`analysis_${user.id}`);
+      if (cached) setAnalysisText(cached);
+    })();
+  }, []);
+
+  // Fetch holdings once
+  const fetchHoldings = async (userId: string) => {
     try {
-      addDebugLog("Refreshing holdings from Plaid...");
+      addDebugLog("Triggering Plaid sync…");
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
-
-      // 1. Trigger Plaid sync
-      const refreshRes = await fetch(
-        "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/fetch-investments",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ userId: user_id }),
+      const token = session?.access_token!;
+      const resp = await fetch(`${fnUrl}/fetch-investments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
-      if (!refreshRes.ok) {
-        const err = await refreshRes.text();
-        throw new Error(`Plaid sync failed: ${err}`);
-      }
-      addDebugLog("Plaid sync successful. Fetching from Supabase...");
+        body: JSON.stringify({ userId }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      addDebugLog("Plaid sync OK; loading from Supabase…");
 
-      // 2. Read from Supabase
       const { data, error } = await supabase
         .from("investment_holdings")
         .select("*")
-        .eq("user_id", user_id);
+        .eq("user_id", userId);
       if (error) throw error;
 
-      setHoldings(data || []);
-      addDebugLog(`Fetched ${data?.length || 0} holdings.`);
+      setHoldings(data ?? []);
+      addDebugLog(`Loaded ${data?.length ?? 0} holdings.`);
     } catch (err: any) {
-      console.error("Error fetching holdings:", err);
-      addDebugLog(`Error: ${err.message}`);
+      console.error("fetchHoldings error:", err);
+      addDebugLog(`Error fetching holdings: ${err.message}`);
     }
   };
 
-  // Handle Plaid Link
+  // Manual “Regenerate Analysis” trigger
+  const handleAnalyze = useCallback(async () => {
+    setAnalysisLoading(true);
+    try {
+      addDebugLog("Requesting portfolio analysis…");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token!;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("Not logged in");
+
+      const res = await fetch(`${fnUrl}/portfolio-analysis`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const { summary } = await res.json();
+      setAnalysisText(summary);
+      localStorage.setItem(`analysis_${user.id}`, summary);
+      addDebugLog("Analysis updated and cached.");
+    } catch (err: any) {
+      console.error("handleAnalyze error:", err);
+      addDebugLog(`Error in analysis: ${err.message}`);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, []);
+
+  // Manual refresh holdings
+  const handleRefresh = async () => {
+    setLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id) await fetchHoldings(user.id);
+    setLoading(false);
+  };
+
+  // Connect Plaid
   const handleConnectAccounts = useCallback(async () => {
     if (!window.Plaid) return;
     setLoading(true);
-
     try {
       const { data: userData } = await supabase.auth.getUser();
-      const user_id = userData.user?.id;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const userId = userData.user?.id;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token!;
+      if (!userId) throw new Error("Login required");
 
-      if (!user_id) {
-        alert("Please log in first.");
-        addDebugLog("User not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      addDebugLog(`User ID: ${user_id}`);
-
-      // Create link token
-      const res = await fetch(
-        "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/create-link-token",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ user_id }),
+      // create link token
+      const ltRes = await fetch(`${fnUrl}/create-link-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Create link token failed: ${err}`);
-      }
-      const { link_token } = await res.json();
-      if (!link_token) throw new Error("Link token missing");
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const { link_token } = await ltRes.json();
 
       const handler = window.Plaid.create({
         token: link_token,
         onSuccess: async (public_token: string, metadata: any) => {
-          addDebugLog("Plaid success: exchanging token...");
-          const inst = metadata.institution || {};
-          // Exchange token
-          const exchangeRes = await fetch(
-            "https://znzmpdgrtbtpljtvjorq.supabase.co/functions/v1/exchange-public-token",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                public_token,
-                user_id,
-                institution: {
-                  id: inst.institution_id,
-                  name: inst.name,
-                },
-              }),
+          addDebugLog("Plaid success: exchanging token…");
+          await fetch(`${fnUrl}/exchange-public-token`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
-          );
-          if (!exchangeRes.ok) {
-            const err = await exchangeRes.text();
-            throw new Error(`Token exchange failed: ${err}`);
-          }
-          addDebugLog("Token exchange success. Refreshing holdings...");
-          await fetchHoldings(user_id);
-          alert("Bank account connected!");
+            body: JSON.stringify({
+              public_token,
+              user_id: userId,
+              institution: {
+                id: metadata.institution?.institution_id,
+                name: metadata.institution?.name,
+              },
+            }),
+          });
+          await fetchHoldings(userId);
           setLoading(false);
         },
-        onExit: () => {
-          addDebugLog("Plaid Link exited by user.");
-          setLoading(false);
-        },
+        onExit: () => setLoading(false),
       });
       handler.open();
     } catch (err: any) {
-      console.error("Connect error:", err);
+      console.error("handleConnectAccounts error:", err);
       addDebugLog(`Error: ${err.message}`);
-      alert("Something went wrong.");
       setLoading(false);
     }
   }, []);
 
-  // Manual refresh
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user_id = userData.user?.id;
-      if (user_id) await fetchHoldings(user_id);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Summary metrics
+  // Metrics
   const totalValue = useMemo(
     () => holdings.reduce((sum, h) => sum + (h.institution_value || 0), 0),
     [holdings],
   );
   const totalCost = useMemo(
     () =>
-      holdings.reduce((sum, h) => sum + h.quantity * (h.cost_basis ?? 0), 0),
+      holdings.reduce((sum, h) => sum + h.quantity * (h.cost_basis || 0), 0),
     [holdings],
   );
   const totalGain = totalValue - totalCost;
-  const totalReturn = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
-  const dailyChange = 0; // implement if you have historical data
+  const totalReturn = totalCost ? (totalGain / totalCost) * 100 : 0;
+  const dailyChange = 0;
 
   const navItems = [
     { icon: <span>📊</span>, label: "Dashboard", isActive: true },
@@ -212,30 +226,39 @@ const Dashboard = () => {
       <div className="flex h-[calc(100vh-64px)] mt-16">
         <Sidebar items={navItems} activeItem="Dashboard" />
         <main className="flex-1 overflow-auto">
+          {/* Header */}
           <div className="container mx-auto px-6 pt-4 pb-2 flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-semibold text-gray-900">
-                Investment Dashboard
-              </h1>
+            <h1 className="text-2xl font-semibold text-gray-900">
+              Investment Dashboard
+            </h1>
+            <div className="flex gap-2">
               <Button
-                className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 h-9 shadow-sm"
                 onClick={handleConnectAccounts}
                 disabled={!plaidReady || loading}
+                className="bg-green-500 hover:bg-green-600 text-white"
               >
-                {loading ? "Connecting..." : "Connect Accounts"}
+                {loading ? "Connecting…" : "Connect Accounts"}
+              </Button>
+              <Button
+                onClick={handleRefresh}
+                className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-1"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
+                {loading ? "Refreshing…" : "Refresh Data"}
+              </Button>
+              <Button
+                onClick={handleAnalyze}
+                disabled={analysisLoading || holdings.length === 0}
+                className="bg-purple-500 hover:bg-purple-600 text-white"
+              >
+                {analysisLoading ? "Analyzing…" : "Regenerate Analysis"}
               </Button>
             </div>
-            <Button
-              onClick={handleRefresh}
-              className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm flex items-center gap-2"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
-              {loading ? "Refreshing..." : "Refresh Data"}
-            </Button>
           </div>
 
+          {/* Content */}
           <div className="container mx-auto p-6 space-y-8">
             <PortfolioSummary
               totalValue={totalValue}
@@ -243,20 +266,28 @@ const Dashboard = () => {
               totalGain={totalGain}
               totalReturn={totalReturn}
             />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <PortfolioChart holdings={holdings} />
+
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col lg:flex-row gap-6">
+                <div className="lg:w-1/2">
+                  <PortfolioChart holdings={holdings} />
+                </div>
+                <div className="lg:w-1/2">
+                  <PortfolioAnalysis
+                    analysisText={analysisText}
+                    isLoading={analysisLoading}
+                  />
+                </div>
               </div>
-              <div className="lg:col-span-2">
-                <HoldingsTable holdings={holdings} />
-              </div>
+              <HoldingsTable holdings={holdings} />
             </div>
 
+            {/* Debug Panel */}
             <div className="bg-gray-800 text-white p-4 rounded shadow mt-8">
               <h2 className="text-lg font-bold mb-2">Debug Panel</h2>
               <div className="space-y-1 text-sm max-h-48 overflow-auto">
-                {debugLog.map((log, idx) => (
-                  <div key={idx}>{log}</div>
+                {debugLog.map((msg, i) => (
+                  <div key={i}>{msg}</div>
                 ))}
               </div>
             </div>

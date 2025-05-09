@@ -52,9 +52,11 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.51.5",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.0.19",
     "react-router": "^6.23.1",
     "react-router-dom": "^6.23.1",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.1",
@@ -69,7 +71,7 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "3.4.1",
-    "tempo-devtools": "^2.0.102",
+    "tempo-devtools": "^2.0.103",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
   }
