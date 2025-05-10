@@ -1,6 +1,6 @@
 // src/components/pages/Dashboard.tsx
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import TopNavigation from "../dashboard/layout/TopNavigation";
 import Sidebar from "../dashboard/layout/Sidebar";
 import { Button } from "@/components/ui/button";
