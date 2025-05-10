@@ -1,5 +1,5 @@
 // src/components/dashboard/PortfolioAnalysis.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -75,10 +75,10 @@ const PortfolioAnalysis = ({
   );
 };
 
-class MarkdownErrorBoundary extends React.Component {
+class MarkdownErrorBoundary extends React.Component<{ children: ReactNode }, { hasError: boolean; error: any }> {
   state = { hasError: false, error: null };
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: any) {
     return { hasError: true, error };
   }
 
