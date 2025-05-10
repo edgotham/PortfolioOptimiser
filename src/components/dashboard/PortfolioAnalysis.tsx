@@ -55,7 +55,7 @@ const PortfolioAnalysis = ({
             <MarkdownErrorBoundary>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                skipHtml={false}
+                skipHtml={true}
               >
                 {safeMarkdown}
               </ReactMarkdown>
