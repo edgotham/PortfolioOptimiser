@@ -15,9 +15,6 @@ const PortfolioAnalysis = ({
   const [safeMarkdown, setSafeMarkdown] = useState<string>("");
   const [renderError, setRenderError] = useState<boolean>(false);
 
-  // For testing: always render simple markdown
-  const testMarkdown = "**Hello** _world_!\n\n- Item 1\n- Item 2";
-
   useEffect(() => {
     if (!analysisText) return;
     try {
@@ -56,7 +53,7 @@ const PortfolioAnalysis = ({
           // WARNING: This uses dangerouslySetInnerHTML. Only use with trusted markdown!
           <div
             className="prose prose-sm lg:prose-base max-w-none"
-            dangerouslySetInnerHTML={{ __html: marked.parse(testMarkdown) }}
+            dangerouslySetInnerHTML={{ __html: marked.parse(safeMarkdown) }}
           />
         ) : (
           <div className="text-gray-700 text-sm">
