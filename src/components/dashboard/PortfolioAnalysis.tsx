@@ -1,9 +1,8 @@
 // src/components/dashboard/PortfolioAnalysis.tsx
-
 import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PortfolioAnalysisProps {
   analysisText: string;

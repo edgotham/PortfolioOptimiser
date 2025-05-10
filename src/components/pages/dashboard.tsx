@@ -46,7 +46,9 @@ const Dashboard = () => {
     script.async = true;
     script.onload = () => setPlaidReady(true);
     document.body.appendChild(script);
-    return () => document.body.removeChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
   }, []);
 
   // 2) On mount, fetch holdings & load last analysis
@@ -98,7 +100,7 @@ const Dashboard = () => {
     }
   };
 
-  // Manual “Regenerate Analysis” trigger
+  // Manual "Regenerate Analysis" trigger
   const handleAnalyze = useCallback(async () => {
     setAnalysisLoading(true);
     try {
