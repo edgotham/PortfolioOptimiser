@@ -52,24 +52,14 @@ const PortfolioAnalysis = ({
           </div>
         ) : safeMarkdown ? (
           <div className="prose prose-sm lg:prose-base max-w-none">
-            {(() => {
-              try {
-                return (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    skipHtml={false}
-                  >
-                    {safeMarkdown}
-                  </ReactMarkdown>
-                );
-              } catch (err) {
-                return (
-                  <div className="text-red-500 text-sm">
-                    Error rendering markdown: {String(err)}
-                  </div>
-                );
-              }
-            })()}
+            <MarkdownErrorBoundary>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                skipHtml={false}
+              >
+                {safeMarkdown}
+              </ReactMarkdown>
+            </MarkdownErrorBoundary>
           </div>
         ) : (
           <div className="text-gray-700 text-sm">
@@ -81,5 +71,20 @@ const PortfolioAnalysis = ({
     </Card>
   );
 };
+
+class MarkdownErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div className="text-red-500 text-sm">Error rendering markdown: {String(this.state.error)}</div>;
+    }
+    return this.props.children;
+  }
+}
 
 export default PortfolioAnalysis;
