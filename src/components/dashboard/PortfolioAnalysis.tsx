@@ -54,16 +54,9 @@ const PortfolioAnalysis = ({
             There was an error rendering the analysis. Please try again.
           </div>
         ) : safeMarkdown ? (
-          <div className="prose prose-sm lg:prose-base max-w-none">
-            <MarkdownErrorBoundary>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                skipHtml={true}
-              >
-                {testMarkdown}
-              </ReactMarkdown>
-            </MarkdownErrorBoundary>
-          </div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml={true}>
+            {testMarkdown}
+          </ReactMarkdown>
         ) : (
           <div className="text-gray-700 text-sm">
             No analysis available. Please connect your accounts to generate
