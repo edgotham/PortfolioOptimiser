@@ -20,8 +20,7 @@ const PortfolioAnalysis = ({
     if (!analysisText) return;
     try {
       const sanitized = analysisText
-        .replace(/\u0000/g, "")
-        .replace(/\u001F/g, "")
+        .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, "")
         .trim();
       setSafeMarkdown(sanitized);
       setRenderError(false);
@@ -29,6 +28,8 @@ const PortfolioAnalysis = ({
       setRenderError(true);
     }
   }, [analysisText]);
+
+  console.log("Rendering markdown:", safeMarkdown);
 
   return (
     <Card className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -51,9 +52,24 @@ const PortfolioAnalysis = ({
           </div>
         ) : safeMarkdown ? (
           <div className="prose prose-sm lg:prose-base max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {safeMarkdown}
-            </ReactMarkdown>
+            {(() => {
+              try {
+                return (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    skipHtml={false}
+                  >
+                    {safeMarkdown}
+                  </ReactMarkdown>
+                );
+              } catch (err) {
+                return (
+                  <div className="text-red-500 text-sm">
+                    Error rendering markdown: {String(err)}
+                  </div>
+                );
+              }
+            })()}
           </div>
         ) : (
           <div className="text-gray-700 text-sm">
