@@ -16,6 +16,9 @@ const PortfolioAnalysis = ({
   const [safeMarkdown, setSafeMarkdown] = useState<string>("");
   const [renderError, setRenderError] = useState<boolean>(false);
 
+  // For testing: always render simple markdown
+  const testMarkdown = "**Hello** _world_!\n\n- Item 1\n- Item 2";
+
   useEffect(() => {
     if (!analysisText) return;
     try {
@@ -57,7 +60,7 @@ const PortfolioAnalysis = ({
                 remarkPlugins={[remarkGfm]}
                 skipHtml={true}
               >
-                {safeMarkdown}
+                {testMarkdown}
               </ReactMarkdown>
             </MarkdownErrorBoundary>
           </div>
