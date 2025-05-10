@@ -1,8 +1,7 @@
 // src/components/dashboard/PortfolioAnalysis.tsx
 import React, { useState, useEffect, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { marked } from "marked";
 
 interface PortfolioAnalysisProps {
   analysisText: string;
@@ -54,9 +53,11 @@ const PortfolioAnalysis = ({
             There was an error rendering the analysis. Please try again.
           </div>
         ) : safeMarkdown ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml={true}>
-            {testMarkdown}
-          </ReactMarkdown>
+          // WARNING: This uses dangerouslySetInnerHTML. Only use with trusted markdown!
+          <div
+            className="prose prose-sm lg:prose-base max-w-none"
+            dangerouslySetInnerHTML={{ __html: marked.parse(testMarkdown) }}
+          />
         ) : (
           <div className="text-gray-700 text-sm">
             No analysis available. Please connect your accounts to generate
@@ -67,20 +68,5 @@ const PortfolioAnalysis = ({
     </Card>
   );
 };
-
-class MarkdownErrorBoundary extends React.Component<{ children: ReactNode }, { hasError: boolean; error: any }> {
-  state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <div className="text-red-500 text-sm">Error rendering markdown: {String(this.state.error)}</div>;
-    }
-    return this.props.children;
-  }
-}
 
 export default PortfolioAnalysis;
