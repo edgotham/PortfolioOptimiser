@@ -47,9 +47,7 @@ const Sidebar = ({
   return (
     <div className="w-[280px] h-full bg-white/80 backdrop-blur-md border-r border-gray-200 flex flex-col">
       <div className="p-6">
-        <h2 className="text-xl font-semibold mb-2 text-gray-900">
-          Portfolio Optimiser
-        </h2>
+        <h2 className="text-xl font-semibold mb-2 text-gray-900">Optimizer</h2>
         <p className="text-sm text-gray-500">Manage your investments</p>
       </div>
 
