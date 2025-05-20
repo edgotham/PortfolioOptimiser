@@ -1,18 +1,7 @@
 {
     "functions": {
-      "api/main.py": {
+      "api/query.py": {
         "runtime": "python3.11"
       }
-    },
-    "routes": [
-      {
-        "src": "/api/(.*)",
-        "dest": "api/main.py"
-      },
-      {
-        "src": "/(.*)",
-        "dest": "/src/$1"
-      }
-    ]
+    }
   }
-  
