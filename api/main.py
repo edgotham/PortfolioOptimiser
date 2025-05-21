@@ -1,39 +1,22 @@
-from openai import OpenAI
-import json
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import openai
 import os
 
-def handler(request):
-    if request.method != "POST":
-        return {
-            "statusCode": 405,
-            "body": json.dumps({"error": "Method not allowed"})
-        }
+app = FastAPI()
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+class PromptRequest(BaseModel):
+    prompt: str
+
+@app.post("/analyze")
+async def analyze_prompt(request: PromptRequest):
     try:
-        data = json.loads(request.body)
-        prompt = data.get("prompt")
-        if not prompt:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing 'prompt'"})
-            }
-
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        client = OpenAI(api_key=openai_api_key)
-
-        response = client.responses.create(
-            model="gpt-4.1",
-            tools=[{"type": "web_search_preview"}],
-            input=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": request.prompt}]
         )
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"response": response})
-        }
-
+        return {"response": response.choices[0].message["content"]}
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        raise HTTPException(status_code=500, detail=str(e))
