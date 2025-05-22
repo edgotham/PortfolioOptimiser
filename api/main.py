@@ -6,6 +6,13 @@ import os
 
 app = FastAPI()
 
+app.add_middleware(           # allow any site during testing
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST"],
+    allow_headers=["*"],
+)
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class PromptRequest(BaseModel):

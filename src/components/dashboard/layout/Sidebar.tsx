@@ -58,7 +58,12 @@ const Sidebar = ({
               key={item.label}
               variant={"ghost"}
               className={`w-full justify-start gap-3 h-10 rounded-xl text-sm font-medium ${item.label === activeItem ? "bg-blue-50 text-blue-600 hover:bg-blue-100" : "text-gray-700 hover:bg-gray-100"}`}
-              onClick={() => onItemClick(item.label)}
+              onClick={() => {
+                onItemClick(item.label);
+                if (item.href) {
+                  window.location.href = item.href;
+                }
+              }}
             >
               <span
                 className={`${item.label === activeItem ? "text-blue-600" : "text-gray-500"}`}

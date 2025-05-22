@@ -6,6 +6,7 @@ import SignUpForm from "./components/auth/SignUpForm";
 import Dashboard from "./components/pages/dashboard";
 import Success from "./components/pages/success";
 import Home from "./components/pages/home";
+import Research from "./components/pages/research";
 import { AuthProvider, useAuth } from "../supabase/auth";
 import { Toaster } from "./components/ui/toaster";
 import { LoadingScreen, LoadingSpinner } from "./components/ui/loading-spinner";
@@ -39,10 +40,13 @@ function AppRoutes() {
             </PrivateRoute>
           }
         />
+        <Route path="/success" element={<Success />} />
         <Route
-          path="/success"
+          path="/research"
           element={
-            <Success />
+            <PrivateRoute>
+              <Research />
+            </PrivateRoute>
           }
         />
       </Routes>
