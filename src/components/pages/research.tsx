@@ -22,24 +22,17 @@ const Research = () => {
 
     setLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token!;
+      // Use direct fetch to web-search API instead of Supabase function
+      const response = await fetch("/api/ai/web-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
 
-      // Call the analyze function through Supabase Edge Function
-      const response = await supabase.functions.invoke(
-        "supabase-functions-analyze",
-        {
-          body: { prompt },
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (response.error) throw new Error(response.error.message);
-      setResult(response.data.response || "No response received");
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      setResult(data.result || "No response received");
     } catch (error: any) {
       console.error("Analysis error:", error);
       setResult(`Error: ${error.message}`);

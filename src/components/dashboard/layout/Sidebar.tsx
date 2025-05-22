@@ -62,6 +62,10 @@ const Sidebar = ({
                 onItemClick(item.label);
                 if (item.href) {
                   window.location.href = item.href;
+                } else {
+                  // Navigate based on label
+                  const path = item.label.toLowerCase();
+                  window.location.href = `/${path}`;
                 }
               }}
             >
